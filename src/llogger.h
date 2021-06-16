@@ -31,13 +31,16 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <ctime>
+#include <chrono>
+#include <iomanip>
 #include <memory>
 
 class llogger;
 
 class llfmt{
   public:
-    enum info_t: char{time = 1, level};
+    enum info_t: char{level = 1, time};
     enum logStr_t: char{logStr};
     using fmtCallback = std::function<std::string(void)>;
 
@@ -123,8 +126,11 @@ class llogger{
     inline void putLogLev();
     inline void putFmtLmb();
 
-    const std::array<void (llogger::*)(), 4> fmtCbs {
-        &llogger::putFmtStr, &llogger::timeStamp, &llogger::putLogLev, &llogger::putFmtLmb
+    const std::array<void (llogger::*)(), 4> fmtCbs{
+        &llogger::putFmtStr, 
+        &llogger::putLogLev, 
+        &llogger::timeStamp, 
+        &llogger::putFmtLmb
     };
 
     bool enable;
@@ -141,6 +147,9 @@ class llogger{
     inline logger operator() (llogger::level lev);
     inline logger operator() (bool predicate);
     inline logger operator() (llogger::level lev, bool predicate);
+
+    template<typename T = std::chrono::microseconds>
+    static inline long long tElapsed(const std::chrono::steady_clock::time_point& start);
 };
 
 void llogger::putFmtStr(){
@@ -189,6 +198,12 @@ llogger::logger llogger::operator() (llogger::level lev, bool predicate){
     curlogger.curLev = lev;
     curlogger.enable = curlogger.curLev <= curlogger._level && predicate;
     return logger();
+}
+
+template<typename T>
+long long llogger::tElapsed(const std::chrono::steady_clock::time_point& start){
+    auto end = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<T>(end - start).count();
 }
 
 void llogger::logger::putFmtStr(){
