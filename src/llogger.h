@@ -94,7 +94,7 @@ class llogger{
 
     llogger(std::ostream& os, level lev, llfmt& format = *defaultFmt);
 
-    inline void activate();
+    void activate();
 
   private:
     struct logger{
