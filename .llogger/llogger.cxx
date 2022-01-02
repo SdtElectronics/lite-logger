@@ -39,7 +39,7 @@ std::shared_ptr<llfmt> llogger::defaultFmt = []{
 }();
 
 llogger::llogger(std::ostream& os, level lev, llfmt& format): _os(os), 
-                                                             _level(lev),
+                                                             level_(lev),
                                                              curLev(llogger::info),
                                                              fmt(format){
     llogger::curlogger = this;

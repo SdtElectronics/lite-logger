@@ -1,5 +1,5 @@
 # Lite Logger
-Lightweight, fully-customizable log library for C++17.
+Single-header, lightweight, fully-customizable log library for modern C++.
 
 ## Highlights
 * Standard streams style operations
@@ -50,7 +50,7 @@ ll(llogger::warning, true) << "Weather control device detected.";
 // [ 2021-10-30 22:34:04 ] WARNING: Weather control device detected.
 ```
 
-Expressions in the message body is always evaluated before the body is passed to the logger. This is enforced by the semantic of C++ language. To defer the evaluation of expressions, they have to be wrapped inside a lambda (or any callable). They will not be evaluated unless the logging conditions are met:
+Expressions in the message body are always evaluated before the body is passed to the logger. This is enforced by the semantic of C++ language. To defer the evaluation of expressions, they have to be wrapped inside a lambda (or any callable). They will not be evaluated unless the logging conditions are met:
 
 ``` c++
 llogger ll(std::cout, llogger::warning);
@@ -100,7 +100,15 @@ ll(llogger::warning) << "Message 1 "
 ll(llogger::warning) << "Message 2 "
 // [2] WARNING: Message 2
 ```
+## Integration
+llogger is a single-header library. To use it, simply include `llogger.h`:
+```C++
+#include "llogger.h"
+```
+llogger requires a compiler supporting C++11 or above.
 
+## Thread Safety
+llogger guarantees segments in a line will not interleave with segments printed in other thread. The thread safety of writing to a stream should be granted by the stream passed to llogger.
 
 ## License
 No license.

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2020 SdtElectronics <null@std.uestc.edu.cn>
+  Copyright (C) 2020-2021 SdtElectronics <null@std.uestc.edu.cn>
   All rights reserved.
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions are met:
@@ -25,16 +25,16 @@
 
 #pragma once
 
+#include <array>
+#include <chrono>
+#include <ctime>
 #include <functional>
+#include <iomanip>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <array>
-#include <ctime>
-#include <chrono>
-#include <iomanip>
-#include <memory>
 
 class llogger;
 
@@ -77,6 +77,11 @@ class llfmt{
     };
 };
 
+#if ((defined(_MSVC_LANG) && _MSVC_LANG < 201703L) || __cplusplus < 201703L)
+// Required before C++17
+const std::array<const char*, 5> llfmt::defLevelNames;
+#endif
+
 std::vector<size_t>& llfmt::fmtOpt(){
     return *(fmtOrdIter++);
 }
@@ -87,6 +92,42 @@ void llfmt::resetIters(){
     fmtLmbIter = fmtLmbs.begin();
 }
 
+llfmt::llfmt(const std::array<const char*, 5>& levelNames): _levelNames(levelNames),
+                                                            fmtOrds(1),
+                                                            fmtStrIter(fmtStrs.begin()),
+                                                            fmtOrdIter(fmtOrds.begin()),
+                                                            fmtLmbIter(fmtLmbs.begin()){
+}
+
+llfmt& llfmt::operator << (llfmt::info_t info){
+    fmtOrds.back().push_back(static_cast<size_t>(info));
+    return *this;
+}
+
+llfmt& llfmt::operator << (const char* fmtStr){
+    fmtOrds.back().push_back(0U);
+    fmtStrs.push_back(std::string(fmtStr));
+    return *this;
+}
+
+llfmt& llfmt::operator << (const std::string& fmtStr){
+    fmtOrds.back().push_back(0U);
+    fmtStrs.push_back(std::string(fmtStr));
+    return *this;
+}
+
+llfmt& llfmt::operator << (llfmt::logStr_t){
+    fmtOrds.push_back(std::vector<size_t>());
+    return *this;
+}
+
+llfmt& llfmt::operator << (const fmtCallback& fmtLmb){
+    fmtOrds.back().push_back(3U);
+    fmtLmbs.push_back(fmtLmb);
+    return *this;
+}
+
+
 class llogger{
   public:
     enum level: signed char{silent = -1, fatal, error, warning, notice, info};
@@ -94,27 +135,35 @@ class llogger{
 
     llogger(std::ostream& os, level lev, llfmt& format = *defaultFmt);
 
-    void activate();
-
   private:
     struct logger{
-        logger();
+        logger(llogger& holder);
         ~logger();
         template <typename T>
         void opImpl(const T& content, std::true_type tp);
         template <typename T>
         void opImpl(const T& content, std::false_type tp);
 
-        static inline void putFmtStr();
+        inline void putFmtStr();
+
+        llogger& holder_;
 
         template <typename T, typename = void>
-        struct is_callable : public std::false_type {};
+        struct is_callable: public std::false_type {};
 
         template <typename T>
+        #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
         struct is_callable<
             T,
             std::enable_if_t<!std::is_same_v<void, std::invoke_result_t<T> > >
         >: public std::true_type {};
+        #else
+        struct is_callable<
+            T,
+            std::enable_if<!std::is_same<void, typename std::result_of<T>::type>::value>
+        >: public std::true_type {};
+        #endif
+
     };
 
     template <typename T>
@@ -133,12 +182,12 @@ class llogger{
         &llogger::putFmtLmb
     };
 
-    bool enable;
+    bool enable_;
     llfmt& fmt;
-    std::ostream& _os;
-    level _level;
+    std::ostream& os_;
+    std::ostringstream buf_;
+    level level_;
     level curLev;
-    thread_local static llogger* curlogger;
 
     static std::shared_ptr<llfmt> defaultFmt;
 
@@ -152,52 +201,74 @@ class llogger{
     static inline long long tElapsed(const std::chrono::steady_clock::time_point& start);
 };
 
+std::shared_ptr<llfmt> llogger::defaultFmt = []{
+    auto llp = std::make_shared<llfmt>();
+    *llp << "[" << llfmt::time  << "] "
+                << llfmt::level << ": "
+                << llfmt::logStr;
+    return llp;
+}();
+
+llogger::llogger(std::ostream& os, level lev, llfmt& format): os_(os), 
+                                                             level_(lev),
+                                                             curLev(llogger::info),
+                                                             fmt(format){
+};
+
+
+llogger::logger::logger(llogger& holder): holder_(holder){
+    llogger::logger::putFmtStr();
+}
+
+llogger::logger::~logger(){
+    if(holder_.enable_){
+        holder_.os_ << holder_.buf_.str() << std::endl;
+        std::ostringstream().swap(holder_.buf_);
+    }
+}
+
 void llogger::putFmtStr(){
-    _os << *(fmt.fmtStrIter++);
+    buf_ << *(fmt.fmtStrIter++);
 }
 
 void llogger::timeStamp(){
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
-    _os << std::put_time(std::localtime(&now_time), " %Y-%m-%d %X ");
+    buf_ << std::put_time(std::localtime(&now_time), " %Y-%m-%d %X ");
 }
 
 void llogger::putLogLev(){
-    _os << fmt._levelNames[static_cast<size_t>(curLev)];
+    buf_ << fmt._levelNames[static_cast<size_t>(curLev)];
 }
 
 void llogger::putFmtLmb(){
-    _os << (*(fmt.fmtLmbIter++))();
+    buf_ << (*(fmt.fmtLmbIter++))();
 }
 
 llogger::logger llogger::operator() (){
-    llogger& curlogger = *llogger::curlogger;
-    curlogger.fmt.resetIters();
-    curlogger.enable = curlogger.curLev <= curlogger._level;
-    return logger();
+    fmt.resetIters();
+    enable_ = curLev <= level_;
+    return logger(*this);
 }
 
 llogger::logger llogger::operator() (llogger::level lev){
-    llogger& curlogger = *llogger::curlogger;
-    curlogger.fmt.resetIters();
-    curlogger.curLev = lev;
-    curlogger.enable = curlogger.curLev <= curlogger._level;
-    return logger();
+    fmt.resetIters();
+    curLev = lev;
+    enable_ = curLev <= level_;
+    return logger(*this);
 }
 
 llogger::logger llogger::operator() (bool predicate){
-    llogger& curlogger = *llogger::curlogger;
-    curlogger.fmt.resetIters();
-    curlogger.enable = curlogger.curLev <= curlogger._level && predicate;
-    return logger();
+    fmt.resetIters();
+    enable_ = curLev <= level_ && predicate;
+    return logger(*this);
 }
 
 llogger::logger llogger::operator() (llogger::level lev, bool predicate){
-    llogger& curlogger = *llogger::curlogger;
-    curlogger.fmt.resetIters();
-    curlogger.curLev = lev;
-    curlogger.enable = curlogger.curLev <= curlogger._level && predicate;
-    return logger();
+    fmt.resetIters();
+    curLev = lev;
+    enable_ = curLev <= level_ && predicate;
+    return logger(*this);
 }
 
 template<typename T>
@@ -207,32 +278,32 @@ long long llogger::tElapsed(const std::chrono::steady_clock::time_point& start){
 }
 
 void llogger::logger::putFmtStr(){
-    if(llogger::curlogger->enable){
-        for(size_t i: llogger::curlogger->fmt.fmtOpt()){
-            (llogger::curlogger->*(llogger::curlogger->fmtCbs[i]))();
+    if(holder_.enable_){
+        for(size_t i: holder_.fmt.fmtOpt()){
+            (holder_.*(holder_.fmtCbs[i]))();
         }
     }
 }
 
 template <typename T>
 void llogger::logger::opImpl(const T& content, std::false_type tp){
-    llogger::curlogger->_os << content;
+    holder_.buf_ << content;
 }
 
 template <typename T>
 void llogger::logger::opImpl(const T& content, std::true_type tp){
-    llogger::curlogger->_os << content();
+    holder_.buf_ << content();
 }
 
 llogger::logger&& operator << (llogger::logger&& wrap, llogger::fmtStr_t){
-    llogger::logger::putFmtStr();
-    return ::std::move(wrap);
+    wrap.putFmtStr();
+    return std::move(wrap);
 }
 
 template <typename T>
 llogger::logger&& operator << (llogger::logger&& wrap, const T& content){
-    if(llogger::curlogger->enable){
+    if(wrap.holder_.enable_){
         wrap.opImpl(content, llogger::logger::is_callable<T>{});
     }
-    return ::std::move(wrap);
+    return std::move(wrap);
 }
