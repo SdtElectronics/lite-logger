@@ -1,5 +1,5 @@
 # Lite Logger
-Single-header, lightweight, fully-customizable log library for modern C++.
+Header-only, lightweight, fully-customizable log library for modern C++.
 
 ## Highlights
 * Standard streams style operations
