@@ -28,8 +28,8 @@ You can augment or modify them easily with slight changes in source code.
 
 The severity level of the message is designated by the first parameter passed to the instance of `llogger`, and messages with level lower than the enabled level are not logged. The enabled severity level is initialized with the second parameter in the `llogger` constructor:
 ``` c++
-llogger ll(std::cout, llogger::error);
-ll(llogger::warning) << "Weather control device detected.";
+llogger logger(std::cout, ll::error);
+logger(ll::warning) << "Weather control device detected.";
 // Nothing is printed
 ```
 If the severity level of the message is not provided, the severity level of the previous message is used.
@@ -37,24 +37,24 @@ If the severity level of the message is not provided, the severity level of the 
 A bool expression can also be passed to the instance of `llogger`. If it is evaluated to `false`, the following message is not logged:
 
 ``` c++
-llogger ll(std::cout, llogger::error);
-ll(1 < 0) << "Weather control device detected.";
+llogger logger(std::cout, ll::error);
+logger(1 < 0) << "Weather control device detected.";
 // Nothing is printed
 ```
 
 The bool expression can be used together with the severity level, and the later is always passed first:
 
 ``` c++
-llogger ll(std::cout, llogger::warning);
-ll(llogger::warning, true) << "Weather control device detected.";
+llogger logger(std::cout, ll::warning);
+logger(ll::warning, true) << "Weather control device detected.";
 // [ 2021-10-30 22:34:04 ] WARNING: Weather control device detected.
 ```
 
 Expressions in the message body are always evaluated before the body is passed to the logger. This is enforced by the semantic of C++ language. To defer the evaluation of expressions, they have to be wrapped inside a lambda (or any callable). They will not be evaluated unless the logging conditions are met:
 
 ``` c++
-llogger ll(std::cout, llogger::warning);
-ll(1 < 0) << []{return "This is not going to be evaluated!";};
+llogger logger(std::cout, ll::warning);
+logger(1 < 0) << []{return "This is not going to be evaluated!";};
 // Nothing is printed
 ```
 
@@ -68,36 +68,36 @@ Lite logger provides extreme flexibility in customization of message format via 
 
 The default format is initialized as a static member of `llogger`. The explicit process of creation and using it to initialize a `llogger` is:
 ``` c++
-llfmt lfmt;
-lfmt << "[" << llfmt::time  << "] "
-            << llfmt::level << ": "
-            << llfmt::logStr;
-llogger ll(std::cout, llogger::info, lfmt);
+ll::llfmt lfmt;
+lfmt << "[" << ll::llfmt::time  << "] "
+            << ll::llfmt::level << ": "
+            << ll::llfmt::logStr;
+llogger ll(std::cout, ll::info, lfmt);
 // The format is
 // [ yyyy-mm-dd hh:mm:ss ] LEVEL: Message.
 ```
 `llfmt::logStr` and  `llogger::fmtStr` allows interleaving the format text with the message:
 ``` c++
-llfmt lfmt;
+ll::llfmt lfmt;
 lfmt << "format text0 " 
-    << llfmt::logStr 
+    << ll::llfmt::logStr 
     << "format text1 " 
-    << llfmt::logStr;
-llogger ll(std::cout, llogger::info, lfmt);
-ll(llogger::warning) << "Message 0 " << llogger::fmtStr << "Message 1";
+    << ll::llfmt::logStr;
+llogger logger(std::cout, ll::info, lfmt);
+logger(ll::warning) << "Message 0 " << ll::fmtStr << "Message 1";
 // format text0 Message 0 format text1 Message 1
 ```
 Functionalities like a counter are easy to be implemented with a function in the format:
 ``` c++
-llfmt lfmt;
+ll::llfmt lfmt;
 int cnt = 0;
 lfmt << "[" << []{std::to_string(++cnt);} << "] "
-            << llfmt::level << ": "
-            << llfmt::logStr;
-llogger ll(std::cout, llogger::info, lfmt);
-ll(llogger::warning) << "Message 1 "
+            << ll::llfmt::level << ": "
+            << ll::llfmt::logStr;
+llogger logger(std::cout, llogger::info, lfmt);
+logger(ll::warning) << "Message 1 "
 // [1] WARNING: Message 1
-ll(llogger::warning) << "Message 2 "
+logger(ll::warning) << "Message 2 "
 // [2] WARNING: Message 2
 ```
 ## Integration
